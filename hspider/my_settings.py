@@ -10,7 +10,7 @@
 host = '127.0.0.1'
 port = 6379
 
-#path
+#spider所在的目录的path
 path = '/home/hspider' #spider所在的目录，自行编辑
 
 #保存item的文件名
