@@ -7,8 +7,6 @@ import time
 import json
 import redis
 import sys
-from pybloom import BloomFilter
-from multiprocessing.dummy import Queue
 from multiprocessing.dummy import Pool as ThreadPool
 from threading import Thread
 import http_request
