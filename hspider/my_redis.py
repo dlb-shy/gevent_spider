@@ -1,4 +1,3 @@
-
 #-*-coding:utf-8-*-
 #!/usr/bin python
 """
@@ -9,6 +8,7 @@ import redis
 import json
 import os
 import sys
+import re
 from pybloom import BloomFilter
 import my_settings
 
@@ -39,6 +39,8 @@ class MyRedis(object):
 			print 'reload bloomfilter from a file'
 			self.bloomfilter = BloomFilter.fromfile(f)
 
+		self.patten = re.compile(r'((http[s]?)://(\w+\.)?\w+\.\w+)/?')#用于从url中提取出主域
+
 
 	def bloom_filter_url(self):
 		"""
@@ -49,20 +51,30 @@ class MyRedis(object):
 		while 1:
 			try:
 				if self.r.llen('unbloom_url_queue') != 0:#判断unbloom_url_queue的长度是否为0，如果为0，说明里面不存在元素
-					urls = self.r.brpop('unbloom_url_queue', 0)#从unbloom_url_queue中取出urls，阻塞版本
-					urls = urls[1]
-					urls = json.loads(urls)#将urls还原为列表的格式
-					for url in urls:
-						if my_settings.domain not in url:#判断url是否为完整的url
-							url = my_settings.domain + url
-						if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
-							print url,'yes'
-							self.r.rpush('url_queue', url)
+					item = self.r.brpop('unbloom_url_queue', 0)#从unbloom_url_queue中取出urls，阻塞版本
+					url_list = item[1]
+					url_list = json.loads(url_list)#将urls还原为元组的格式,为（url, urls）的元组格式
+					urls = url_list[1]
+					domain = self.patten.search(url_list[0]).group(1)#提取主域名，比如r'https://movie.douban.com'。主要用于在抓取多个域名的时候，抓取单域名可以不需要
+					#print domain
+					if domain not in my_settings.domain:#判断提取出的domain是否在my_settings.domain中，如果不在就丢弃urls
+						del urls
+						continue
+					else:
+						prot_sch = self.patten.search(url_list[0]).group(2)#提取协议字段，要么是http，要么是https
+						#print prot_sch
+						for url in urls:
+							if (domain not in url) and (prot_sch not in url):#判断该url是否在抓取的主域之下(即该url是否要继续抓取)且url是否为完整的url
+								url = domain + url
+								if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
+									print url,'yes'
+									self.r.rpush('url_queue', url)
 			except KeyboardInterrupt:
 			#捕获异常.当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
 				with open('/home/hujun/bloomfilter.txt', 'w') as f:
-					print 'save bloomfiltr'
-					self.bloomfilter.tofile(f)
+					print 'save bloomfilter'
+					self.bloomfilter.tofile(f)#将bloomfilter保存到文件
+					self.r.save#同步保存redis数据到磁盘
 					sys.exit(1)
 
 
