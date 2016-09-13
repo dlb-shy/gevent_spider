@@ -41,13 +41,10 @@ class HuSpider(object):
 		"""
 		print 'begin first request'
 		logging.info(u'开始抓取第一个url[%s]',my_settings.first_url)
-		first_urls = self.my_request.get(my_settings.first_url)
+		self.my_request.get(my_settings.first_url)
 
-		first_urls = json.dumps(first_urls)
-		#将first_urls放到redis服务器中的unbloom_url_queue队列中
-		self.r.rpush('unbloom_url_queue', first_urls)
+	
 
-					
 	def make_request(self):
 		"""
 
