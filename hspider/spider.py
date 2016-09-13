@@ -1,4 +1,3 @@
-
 #-*-coding:utf-8-*-
 #!/usr/bin python
 import logging
@@ -7,8 +6,8 @@ import time
 import json
 import redis
 import sys
-from multiprocessing.dummy import Pool as ThreadPool
-from threading import Thread
+import gevent
+from gevent import monkey; monkey.patch_all()
 import http_request
 import save 
 import my_settings
@@ -59,60 +58,25 @@ class HuSpider(object):
 		#生成随机并发请求次数，最多不超过settings.max_requests_count次数
 		num = random.randint(my_settings.min_requests_count, my_settings.max_requests_count)
 		
-		t_thread = ThreadPool(processes=num)
 		url_list = []
 		while 1:
 			if self.r.llen('url_queue') != 0:#只要redis服务器中url_queue中有url,长度就不会为0
 				#从redis服务器的url_queue中取出一个url,注意取出的是一个元组对，第一个元素是队列的名字，第二个才是目标元素
-				url = self.r.blpop('url_queue', 0)
-				url = url[1]
+				result = self.r.blpop('url_queue', 0)
+				url = result[1]
 				
 				logging.info('will begin to crawl url[%s]',url)
 				url_list.append(url)
 
 				if len(url_list) == num or self.r.llen('url_queue') == 0:
-
-					#利用multiprocessing.dummy中的Pool进行多线程同时请求
-					result = t_thread.map_async(func=self.my_request.get, iterable=url_list)
-					result = result.get()#返回的result是一个列表，由多线程的结果组成
-
-					for result in result:
-						if isinstance(result, list):
-							#print result
-							result = json.dumps(result)#统一以json的格式传输，从队列中取出的时候，在用json.loads()还原为原本格式
-							self.r.rpush('unbloom_url_queue', result)
-						elif isinstance(result, dict):
-							#print result
-							result = json.dumps(result)
-							self.r.rpush('item_queue', result)
-						else:
-							pass
+					#利用gevent进行请求
+					threads = [gevent.spawn(self.my_request.get, url) for url in url_list]
+					gevent.joinall(threads)
+				
 					url_list = []
 					time.sleep(random.randint(my_settings.time_min_delay, my_settings.time_max_delay))#设置下载延迟
 			
-
-						
-	def save_item(self):
-		"""
-
-		从redis的item_queue队列中获取item数据，由于我们之前将item dumps为json格式
-		从item_queue队列中取出item就需要loads item
-		"""
-		print u'ready to save item'
-		
-		while 1:
-			if self.r.llen('item_queue') != 0:
-				print 'item to save!'
-				item = self.r.brpop('item_queue',0)
-				item = item[1]
-				item =json.loads(item)
-				print item
-				#logging.info('')
-			
-				save.save_item_to_file(item)
-					
-		
-
+	
 					
 	def close_spider(self):
 		"""
@@ -128,12 +92,8 @@ if __name__  == "__main__":
 	
 	if myspider.r.llen('url_queue') == 0:#如果redis服务器的url_queue队列为空，那么就请求初始url，否则直接从url_queue队列中取出url开始请求
 		myspider.start_request()
-	p1 = Thread(target=myspider.make_request, args=())
-	p2 = Thread(target=myspider.save_item, args=())
 
-	p1.start()	
-	p2.start()
+	myspider.make_request()
 	
-	p1.join()
-	p2.join()
-		
+
+	
