@@ -13,10 +13,6 @@ port = 6379
 #path
 path = '/home/hujun/hspider' #spider所在的目录，自行编辑
 
-#保存item的文件名
-item_filename = r'/home/hujun/item.txt' #存放item的文件，自行编辑
-
-
 #logging file
 log_filename = r'/home/hujun/log.txt' #保存log的文件，自行编辑
 
