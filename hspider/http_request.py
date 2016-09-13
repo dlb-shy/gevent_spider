@@ -12,8 +12,6 @@ import my_settings
 class Hu_httprequest(object):
 
 	def __init__(self):
-		with open(my_settings.ip_filename,'r') as f:
-			self.ip_list = f.readlines()
 		self.patten = re.compile(r'/subject/[0-9]+/$')
 		
 		#创建redis服务器的连接池
