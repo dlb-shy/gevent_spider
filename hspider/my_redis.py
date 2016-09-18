@@ -70,12 +70,36 @@ class MyRedis(object):
 									print url,'yes'
 									self.r.rpush('url_queue', url)
 			except KeyboardInterrupt:
-			#捕获异常.当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
-				with open('/home/hujun/bloomfilter.txt', 'w') as f:
-					print 'save bloomfilter'
-					self.bloomfilter.tofile(f)#将bloomfilter保存到文件
-					self.r.save#同步保存redis数据到磁盘
-					sys.exit(1)
+			#当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
+				print u"""
+				退出程序,请按0
+				暂停程序,请按任何非0字符
+				"""
+				num = raw_input('>')
+				if num == '0':
+					with open('/home/hujun/bloomfilter.txt', 'w') as f:
+						print 'save bloomfiltr to file！'
+						self.bloomfilter.tofile(f)#将bloomfilter保存到文件
+						self.r.save#同步保存redis数据到磁盘
+						print u'程序已正常退出'
+						sys.exit(1)
+				else:
+					print u'''
+					程序已经处于暂停状态
+					重新启动，请按任何非0字符
+					退出程序，请按0
+					'''
+					count = raw_input(">")
+					if count == '0':
+						with open('/home/hujun/bloomfilter.txt', 'w') as f:
+						print 'save bloomfiltr to file！'
+						self.bloomfilter.tofile(f)#将bloomfilter保存到文件
+						self.r.save#同步保存redis数据到磁盘
+						print u'程序已正常退出'
+						sys.exit(1)
+					else:
+						print u'程序重新开始运行'
+						continue				
 
 
 
