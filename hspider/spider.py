@@ -57,23 +57,45 @@ class HuSpider(object):
 		
 		url_list = []
 		while 1:
-			if self.r.llen('url_queue') != 0:#只要redis服务器中url_queue中有url,长度就不会为0
-				#从redis服务器的url_queue中取出一个url,注意取出的是一个元组对，第一个元素是队列的名字，第二个才是目标元素
-				result = self.r.blpop('url_queue', 0)
-				url = result[1]
-				
-				logging.info('will begin to crawl url[%s]',url)
-				url_list.append(url)
-
-				if len(url_list) == num or self.r.llen('url_queue') == 0:
-					#利用gevent进行请求
-					threads = [gevent.spawn(self.my_request.get, url) for url in url_list]
-					gevent.joinall(threads)
-				
-					url_list = []
-					time.sleep(random.randint(my_settings.time_min_delay, my_settings.time_max_delay))#设置下载延迟
-			
+			try:
+				if self.r.llen('url_queue') != 0:#只要redis服务器中url_queue中有url,长度就不会为0
+					#从redis服务器的url_queue中取出一个url,注意取出的是一个元组对，第一个元素是队列的名字，第二个才是目标元素
+					result = self.r.blpop('url_queue', 0)
+					url = result[1]
+					
+					logging.info('will begin to crawl url[%s]',url)
+					url_list.append(url)
 	
+					if len(url_list) == num or self.r.llen('url_queue') == 0:
+						#利用gevent进行请求
+						threads = [gevent.spawn(self.my_request.get, url) for url in url_list]
+						gevent.joinall(threads)
+					
+						url_list = []
+						time.sleep(random.randint(my_settings.time_min_delay, my_settings.time_max_delay))#设置下载延迟
+			except KeyboardInterrupt:#如果想要暂停程序,就键下ctrl+c
+				print u'''
+				退出程序,请按0
+				暂停程序,请按任何非0字符
+				'''
+				num = raw_input('>')
+				if num == '0':
+					self.r.save
+					sys.exit(1)
+				else:
+					print u'''
+					程序已经处于暂停状态
+					重新启动，请按任何非0字符
+					退出程序，请按0
+					'''
+					count = raw_input(">")
+					if count == '0':
+						self.r.save
+						sys.exit(1)
+					else:
+						print u'程序重新开始运行'
+						continue					
+				
 					
 	def close_spider(self):
 		"""
@@ -89,7 +111,6 @@ if __name__  == "__main__":
 	
 	if myspider.r.llen('url_queue') == 0:#如果redis服务器的url_queue队列为空，那么就请求初始url，否则直接从url_queue队列中取出url开始请求
 		myspider.start_request()
-
 	myspider.make_request()
 	
 
