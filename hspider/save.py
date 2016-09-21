@@ -16,7 +16,7 @@ class Save(object):
 	def save_to_file(self):
 		"""
 
-		从redis列表中的response_queue中获取response对象，然后进行相关处理
+		从redis列表中的item_queue中获取item对象，然后进行相关处理
 		"""
 		while 1:
 			try:
