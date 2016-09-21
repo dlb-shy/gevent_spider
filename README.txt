@@ -1,9 +1,10 @@
 需要安装的python库:
 1.pybloom
 2.redis
-3.scrapy(用到了srapy的Selector解析器)
+3.parsel
 4.gevent
-5.requests
+5.urllib3
+6.chardet
 
 需要安装的数据库:
 redis
