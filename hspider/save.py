@@ -1,12 +1,21 @@
 #-*-coding:utf-8-*-
 #!/usr/bin python
+from gevent import monkey;monkey.patch_all()
 import os
 import json
 import sys
+import logging
+import logging.config
 import redis
 import my_settings
 
+logging.config.dictConfig(my_settings.my_logging_config)
+logger = logging.getLogger('HSpider')
+
 class Save(object):
+
+	logging.config.dictConfig(my_settings.my_logging_config)
+	logger = logging.getLogger('HSpider')
 
 	def __init__(self):
 		self.pool = redis.ConnectionPool(host=my_settings.host, port=my_settings.port, db=0)
@@ -16,7 +25,7 @@ class Save(object):
 	def save_to_file(self):
 		"""
 
-		从redis列表中的item_queue中获取item对象，然后进行相关处理
+		从redis列表中的response_queue中获取response对象，然后进行相关处理
 		"""
 		while 1:
 			try:
@@ -24,7 +33,7 @@ class Save(object):
 					print u'save_item'
 					result = self.r.brpop('item_queue', 0)[1]
 					item = json.loads(result)
-					
+					print item
 					item['movie_name'] = (''.join(item['movie_name'])).encode('utf-8')
 					item['movie_year'] = (''.join(item['movie_year'])).encode('utf-8')
 					item['movie_type'] = ('-'.join(item['movie_type'])).encode('utf-8')
@@ -32,9 +41,13 @@ class Save(object):
 					item['url' ] = item['url'].encode('utf-8')
 
 					with open(my_settings.item_filename, 'a') as f:
-						f.write('%s, %s, %s, %s, %s%s'%(item['movie_name'], item['movie_year'], item['movie_type'], item['movie_rate'],item['url'], os.linesep))
-
-				
+						f.write('%s, %s, %s, %s, %s%s'%(item['movie_name'], 
+							item['movie_year'], 
+							item['movie_type'], 
+							item['movie_rate'],
+							item['url'],
+							 os.linesep))
+						logger.info('successfully to save item [%s]', item['movie_name'])
 			except KeyboardInterrupt:#捕获键盘上的ctrl+c
 				print u'''
 				退出程序,请按0
@@ -52,7 +65,6 @@ class Save(object):
 					'''
 					count = raw_input(">")
 					if count == '0':
-						self.r.save
 						sys.exit(1)
 					else:
 						print u'程序重新开始运行'
