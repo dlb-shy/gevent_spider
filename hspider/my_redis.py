@@ -4,15 +4,15 @@
 该脚本单独运行于redis服务器。用于将列表unbloom_url_queue的每一个元素作用于bloomfilter
 然后生成新的url，并放到url_queue队列中
 """
+from gevent import monkey;monkey.patch_all()
 import redis
 import json
 import os
-import sys
+import sys; sys.path.append('/home/hujun/hspider')
 import re
+import urlparse
 from pybloom import BloomFilter
 import my_settings
-
-sys.path.append(my_settings.path)
 
 class MyRedis(object):
 	"""
@@ -50,27 +50,25 @@ class MyRedis(object):
 		print 'begin to filter url!'
 		while 1:
 			try:
-				if self.r.llen('unbloom_url_queue') != 0:#判断unbloom_url_queue的长度是否为0，如果为0，说明里面不存在元素
+				if self.r.llen('unbloom_url_queue'):#判断unbloom_url_queue的长度是否为0，如果为0，说明里面不存在元素
 					item = self.r.brpop('unbloom_url_queue', 0)#从unbloom_url_queue中取出urls，阻塞版本
 					url_list = item[1]
 					url_list = json.loads(url_list)#将urls还原为元组的格式,为（url, urls）的元组格式
 					urls = url_list[1]
-					domain = self.patten.search(url_list[0]).group(1)#提取主域名，比如r'https://movie.douban.com'。主要用于在抓取多个域名的时候，抓取单域名可以不需要
-					#print domain
-					if domain not in my_settings.domain:#判断提取出的domain是否在my_settings.domain中，如果不在就丢弃urls
-						del urls
-						continue
-					else:
-						prot_sch = self.patten.search(url_list[0]).group(2)#提取协议字段，要么是http，要么是https
-						#print prot_sch
-						for url in urls:
-							if (domain not in url) and (prot_sch not in url):#判断该url是否在抓取的主域之下(即该url是否要继续抓取)且url是否为完整的url
+					parse_url = urlparse.urlparse(url_list[0])
+					domain = parse_url.scheme + '://' + parse_url.netloc#提取出协议加主机名，比如‘https://movie.douban.com’
+
+					for url in urls:	
+						if (domain not in url) and (parse_url[0] in url):#这一步就可以排除所有不在domain下的url,比如‘https://www.douban.com’这个域名以及该域名下的所有url就会被排除
+							del url
+						else:
+							if domain not in url:#这一步判断url是否为完整的url
 								url = domain + url
-								if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
-									print url,'yes'
-									self.r.rpush('url_queue', url)
+							if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
+								print url,'yes'
+								self.r.rpush('url_queue', url)
 			except KeyboardInterrupt:
-			#当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
+			#捕获异常.当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
 				print u"""
 				退出程序,请按0
 				暂停程序,请按任何非0字符
@@ -78,28 +76,27 @@ class MyRedis(object):
 				num = raw_input('>')
 				if num == '0':
 					with open('/home/hujun/bloomfilter.txt', 'w') as f:
-						print 'save bloomfiltr to file！'
+						print 'save bloomfilter'
 						self.bloomfilter.tofile(f)#将bloomfilter保存到文件
 						self.r.save#同步保存redis数据到磁盘
-						print u'程序已正常退出'
+						print u'ready to exit'
 						sys.exit(1)
 				else:
-					print u'''
-					程序已经处于暂停状态
+					print u"""
+					程序已经处于暂停暂停
 					重新启动，请按任何非0字符
 					退出程序，请按0
-					'''
-					count = raw_input(">")
+					"""
+					count = raw_input('>')
 					if count == '0':
 						with open('/home/hujun/bloomfilter.txt', 'w') as f:
-						print 'save bloomfiltr to file！'
-						self.bloomfilter.tofile(f)#将bloomfilter保存到文件
-						self.r.save#同步保存redis数据到磁盘
-						print u'程序已正常退出'
-						sys.exit(1)
+							print 'save bloomfilter'
+							self.bloomfilter.tofile(f)#将bloomfilter保存到文件
+							print u'ready to exit'
+							sys.exit(1)
 					else:
 						print u'程序重新开始运行'
-						continue				
+						continue
 
 
 
