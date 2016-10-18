@@ -1,34 +1,32 @@
-需要安装的python库:
+一、需要安装的python库:
 1.pybloom
 2.redis
 3.parsel
 4.gevent
-5.urllib3
+5.requests
 6.chardet
+7.MySQLdb
 
-需要安装的数据库:
-redis
+二、需要安装的数据库:
+1.redis
+2.mysql
 
-实现的功能:
-1.待抓取url队列永久保存
-2.用bloomfilter过滤url
-3.共享一个url队列，实现了分布式
-4.检测网页编码
-5.暂停,继续,终止程序
-6.urllib3,使用其中的连接池,这样就可以重用底层的tcp/ip链接,减少request的消耗
+三、实现的功能
+1.用redis做url队列
+2.http缓存
+3.自动请求调优，尽可能保证每次请求的间隔都不一样
+4.gevent并发请求
 
-待完善:
-1.不能解析js网页,正在完善中,使用splash
-2.暂时没有登录功能,没有记录cookie
-3.url调度
-4.http缓存
-5.......
+四、待完善
+1.解析js网页，selenium+phantomjs
+2.重用tcp/ip链接，urllib3
+3.更新已下载的网页
+4.登录验证
+......
 
-
-代码范例为抓取豆瓣电影
-
+五、代码范例为抓取豆瓣电影
 ..........................
 save.py
 spider.py
 my_redis.py
-这三个程序需要打开三个终端分别运行
+这三个脚本单独运行运行
