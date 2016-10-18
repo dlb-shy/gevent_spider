@@ -4,29 +4,28 @@
 该脚本单独运行于redis服务器。用于将列表unbloom_url_queue的每一个元素作用于bloomfilter
 然后生成新的url，并放到url_queue队列中
 """
-from gevent import monkey;monkey.patch_all()
+from gevent import monkey; monkey.patch_all()
 import redis
 import json
 import os
-import sys; sys.path.append('/home/hujun/hspider')
+import sys
 import re
+import signal
 import urlparse
 from pybloom import BloomFilter
 import my_settings
+import myconnection
 
-class MyRedis(object):
+class MyRedis(myconnection.RedisConnect):
 	"""
 
 	redis
 	"""
 	def __init__(self):
-		"""
-		xxx
-		"""
-		self.pool = redis.ConnectionPool(host=my_settings.host, port=my_settings.port, db=0)
-		self.r = redis.StrictRedis(connection_pool=self.pool)
+		super(MyRedis, self).__init__()
 		
 		try:
+			print u'正在初始化,请稍后.....'
 			f = open('/home/hujun/bloomfilter.txt')#尝试打开保存bloomfilter的文件
 		except IOError:
 			print 'create a new bloomfilter without file'
@@ -39,9 +38,6 @@ class MyRedis(object):
 			print 'reload bloomfilter from a file'
 			self.bloomfilter = BloomFilter.fromfile(f)
 
-		self.patten = re.compile(r'((http[s]?)://(\w+\.)?\w+\.\w+)/?')#用于从url中提取出主域
-
-
 	def bloom_filter_url(self):
 		"""
 
@@ -49,55 +45,40 @@ class MyRedis(object):
 		"""
 		print 'begin to filter url!'
 		while 1:
-			try:
-				if self.r.llen('unbloom_url_queue'):#判断unbloom_url_queue的长度是否为0，如果为0，说明里面不存在元素
-					item = self.r.brpop('unbloom_url_queue', 0)#从unbloom_url_queue中取出urls，阻塞版本
-					url_list = item[1]
-					url_list = json.loads(url_list)#将urls还原为元组的格式,为（url, urls）的元组格式
-					urls = url_list[1]
-					parse_url = urlparse.urlparse(url_list[0])
-					domain = parse_url.scheme + '://' + parse_url.netloc#提取出协议加主机名，比如‘https://movie.douban.com’
+			#捕获信号ctrl+c,用于终止程序
+			signal.signal(signal.SIGINT, self.stop)			
+			if self.r.llen('unbloom_url_queue'):#判断unbloom_url_queue的长度是否为0，如果为0，说明里面不存在元素
+				item = json.loads(self.r.brpop('unbloom_url_queue', 0)[1])
+				url_list = item['url_list']
+				base_url = item['url']
+				parse_url = urlparse.urlparse(base_url)
+				domain = '://'.join((parse_url.scheme, parse_url.netloc))#提取domain，比如‘https://movie.douban.com’
 
-					for url in urls:	
-						if (domain not in url) and (parse_url[0] in url):#这一步就可以排除所有不在domain下的url,比如‘https://www.douban.com’这个域名以及该域名下的所有url就会被排除
-							del url
-						else:
-							if domain not in url:#这一步判断url是否为完整的url
-								url = domain + url
-							if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
-								print url,'yes'
-								self.r.rpush('url_queue', url)
-			except KeyboardInterrupt:
-			#捕获异常.当需要退出的时候就在键盘上按下ctrl+c，这时程序就会退出。捕获这个异常，并且保存bloomfilter到文件
-				print u"""
-				退出程序,请按0
-				暂停程序,请按任何非0字符
-				"""
-				num = raw_input('>')
-				if num == '0':
-					with open('/home/hujun/bloomfilter.txt', 'w') as f:
-						print 'save bloomfilter'
-						self.bloomfilter.tofile(f)#将bloomfilter保存到文件
-						self.r.save#同步保存redis数据到磁盘
-						print u'ready to exit'
-						sys.exit(1)
-				else:
-					print u"""
-					程序已经处于暂停暂停
-					重新启动，请按任何非0字符
-					退出程序，请按0
-					"""
-					count = raw_input('>')
-					if count == '0':
-						with open('/home/hujun/bloomfilter.txt', 'w') as f:
-							print 'save bloomfilter'
-							self.bloomfilter.tofile(f)#将bloomfilter保存到文件
-							print u'ready to exit'
-							sys.exit(1)
+				for url in url_list:
+					#这一步就可以排除所有不在domain下的url,
+					#比如‘https://www.douban.com’这个域名以及该域名下的所有url就会被排除
+					if (parse_url.netloc not in url) and (parse_url.scheme in url):
+						pass
 					else:
-						print u'程序重新开始运行'
-						continue
-
+						#这一步判断url是否为完整的url
+						if domain not in url:
+							url = ''.join([domain, url])
+						if '#' in url:
+							#如果url中存在#号，就删除它
+							url = urlparse.urldefrag(url)[0]
+							#url中可能存在转义字符,统一转化为原始字符,比如将%7e转化为~
+							url = urllib.unquote(url)
+						if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
+							print url, 'it is not in bloomfilter'
+							new_list = json.dumps({'url': url, 'base_url': base_url})
+							self.r.rpush('url_queue', new_list)
+		
+	def stop(self, signum, frame):
+		print u'程序将要终止运行，正在保存bloomfilter到文件，请稍候......'
+		with open('/home/hujun/bloomfilter.txt', 'w') as f:	
+			self.bloomfilter.tofile(f)#将bloomfilter保存到文件
+			print u'保存数据完成，即将退出'
+			sys.exit(1)
 
 
 if __name__ == "__main__":
