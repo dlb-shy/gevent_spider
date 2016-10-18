@@ -4,75 +4,65 @@ from gevent import monkey;monkey.patch_all()
 import os
 import json
 import sys
+import parsel
 import logging
 import logging.config
 import redis
+import re
+import signal
+import MySQLdb
 import my_settings
-
-logging.config.dictConfig(my_settings.my_logging_config)
-logger = logging.getLogger('HSpider')
-
-class Save(object):
-
-	logging.config.dictConfig(my_settings.my_logging_config)
-	logger = logging.getLogger('HSpider')
-
-	def __init__(self):
-		self.pool = redis.ConnectionPool(host=my_settings.host, port=my_settings.port, db=0)
-		self.r = redis.StrictRedis(connection_pool=self.pool)
-
+import myconnection
 		
-	def save_to_file(self):
-		"""
+class Html_Handle(myconnection.MySQLConnect, myconnection.RedisConnect):
+	logging.config.dictConfig(my_settings.my_logging_config)
+	def __init__(self):
+		#这里不用super()去继承父类的原因是在多重继承的情况下
+		#super()只会查找一个父类		
+		myconnection.MySQLConnect.__init__()
+		myconnection.RedisConnect.__init__()
 
-		从redis列表中的response_queue中获取response对象，然后进行相关处理
-		"""
+		self.patten = re.compile(r'/subject/[0-9]+/$')
+		self.logger = logging.getLogger('HSpider')
+
+	def parse_and_save_html(self):
 		while 1:
-			try:
-				if self.r.llen('item_queue'):#判断该队列是否为空
-					print u'save_item'
-					result = self.r.brpop('item_queue', 0)[1]
-					item = json.loads(result)
-					print item
-					item['movie_name'] = (''.join(item['movie_name'])).encode('utf-8')
-					item['movie_year'] = (''.join(item['movie_year'])).encode('utf-8')
-					item['movie_type'] = ('-'.join(item['movie_type'])).encode('utf-8')
-					item['movie_rate'] = (''.join(item['movie_rate'])).encode('utf-8')
-					item['url' ] = item['url'].encode('utf-8')
-
-					with open(my_settings.item_filename, 'a') as f:
-						f.write('%s, %s, %s, %s, %s%s'%(item['movie_name'], 
-							item['movie_year'], 
-							item['movie_type'], 
-							item['movie_rate'],
-							item['url'],
-							 os.linesep))
-						logger.info('successfully to save item [%s]', item['movie_name'])
-			except KeyboardInterrupt:#捕获键盘上的ctrl+c
-				print u'''
-				退出程序,请按0
-				暂停程序,请按任何非0字符
-				'''
-				num = raw_input('>')
-				if num == '0':
-					self.r.save
-					sys.exit(1)
-				else:
-					print u'''
-					程序已经处于暂停状态
-					重新启动，请按任何非0字符
-					退出程序，请按0
-					'''
-					count = raw_input(">")
-					if count == '0':
-						sys.exit(1)
+			#signal.SIGINT信号对应的是ctrl+c,当收到这个信号时就调用stop函数
+			signal.signal(signal.SIGINT, self.stop)
+			if self.r.llen('html'):
+				content = json.loads(self.r.brpop('html', 0)[1])
+				item = my_settings.my_item#用于提取结构化数据
+				if content['http_code'] == 200:
+					sel = parsel.Selector(text=content['html'], type='html')
+					#url的格式符合正则表达式，说明对应的response需要提取结构化数据
+					if self.patten.search(content['url']):
+						
+						#提取结构化数据
+						item['movie_name'] = sel.xpath('//h1/span[@property="v:itemreviewed"]/text()').extract()
+						item['movie_year'] = sel.xpath('//span[@property="v:initialReleaseDate"]/text()').extract()
+						item['movie_type'] = sel.xpath('//span[@property="v:genre"]/text()').extract()
+						item['movie_rate'] = sel.xpath('//strong[@class="ll rating_num"]/text()').extract()
 					else:
-						print u'程序重新开始运行'
-						continue
+						#提取待抓取的未过滤的urls
+						urls = sel.xpath('//a/@href').re(r'/subject/[0-9]+/$|/tag/.*')
+						url_list = list(set(urls))
+						#这里需要传输url的原因，是因为网页中提取出来的可能是相对网址，在后续操作中需要将相对网址补充为绝对网址
+						result = json.dumps({'url': content['url'], 'url_list': url_list})
+						self.r.rpush('unbloom_url_queue', result)
+						
+                #下面的sql语句没有写完整，需要补充完整
+				self.cousor.execute('insert into douban () values ()',(content['url'], content['http_code'],
+					                content['response_headers'], content['html'],item['movie_name'], item['movie_year'], 
+					                item['movie_type'], item['movie_rate']))
+				self.connect.commit()
 
-
+	def stop(self, signum, frame):
+		print u'程序将要停止运行......'
+		self.cousor.close()
+		self.connect.close()
+		sys.exit(1)
 
 
 if __name__ == '__main__':
-	test = Save()
-	test.save_to_file()
+	test = Html_Handle()
+	test.parse_and_save_html()
