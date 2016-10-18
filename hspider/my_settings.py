@@ -5,13 +5,20 @@
 
 设置
 """
-#redis host port ，默认链接本地 
-host = '127.0.0.1'
+#redis的host port db 
+redis_host = '127.0.0.1'
+redis_port = 6379
+redis_db = 0
 
-port = 6379
+#mysql的host, uesrname, password, database
+mysql_host = 'localhost'
+mysql_username = 'root'
+mysql_password = 'password'
+mysql_database = 'database'
+charset = 'utf-8'
 
-#保存item的文件名
-item_filename = r'/home/hujun/item.txt' #存放item的文件，自行编辑
+#log file
+log_file = r'/home/hujun/log.log'
 
 #logging config
 my_logging_config = {
@@ -32,7 +39,7 @@ my_logging_config = {
 							'class':'logging.FileHandler',
 							'level':'INFO',
 							'formatter':'filefmt',
-							'filename':r'/home/hujun/log.log',
+							'filename':log_file,
 							'encoding':'utf-8'
 								},
 
@@ -54,11 +61,10 @@ my_logging_config = {
 
 #定义提取的结构化数据
 my_item = {
-	'movie_name':None,
-	'movie_year':None, 
-	'movie_type':None, 
-	'movie_rate':None,
-	'url':None}
+	'movie_name':0,
+	'movie_year':0, 
+	'movie_type':0, 
+	'movie_rate':0}
 
 
 #user-agent
@@ -86,21 +92,16 @@ user_agent = [
 ]
 
 
-#默认的最大抓取间隔
-time_max_delay = 6
+#默认的抓取间隔
+time_delay = 5
 
-#最小抓取间隔
-time_min_delay = 3
-
-#单站点最大并发抓取
-max_requests_count = 4
-
-#单站点最小抓取并发数
-min_requests_count = 2
+#单站点并发抓取
+requests_count = 2
 
 #first request url
 first_url = r'https://movie.douban.com'
 
 #需要抓取的站点的主域
 domain = [r'https://movie.douban.com']
+
 
