@@ -67,10 +67,8 @@ class HttpRequest(myconnection.RedisConnect):
 				#self.r.rpush('request_failed_queue', url)
 			else:
 				response.encoding = webpage_code(response)
-				#在这里传输response.headers的时候，由于json的原因，将它转换为字符串表示
-				#在后续操作中如果需要操作response.headers的话，使用eval()表达式即可
 				content = json.dumps({'url': url, 'http_code': response.status_code, 
-				           'response_headers': unicode(response.headers), 'html': response.text})
+				           'response_headers': unicode(dict(response.headers)), 'html': response.text})
 				self.r.rpush('html', content)
 												
 	def get_js_webpage(self):
