@@ -1,6 +1,6 @@
 一、需要安装的python库:
 1.pybloom
-2.redis
+2.redis-py
 3.parsel
 4.gevent
 5.requests
@@ -23,4 +23,4 @@
 save.py
 spider.py
 my_redis.py
-这三个脚本单独运行运行
+这三个脚本单独运行
