@@ -13,8 +13,8 @@ redis_db = 0
 #mysql的host, uesrname, password, database
 mysql_host = 'localhost'
 mysql_username = 'root'
-mysql_password = 'password'
-mysql_database = 'database'
+mysql_password = 'lymlhhj123'
+mysql_database = 'douban'
 charset = 'utf-8'
 
 #log file
@@ -59,14 +59,6 @@ my_logging_config = {
 					
 					}
 
-#定义提取的结构化数据
-my_item = {
-	'movie_name':0,
-	'movie_year':0, 
-	'movie_type':0, 
-	'movie_rate':0}
-
-
 #user-agent
 user_agent = [
 	"Mozilla/5.0+(Windows+NT+6.2;+WOW64)+AppleWebKit/537.36+(KHTML,+like+Gecko)+Chrome/45.0.2454.101+Safari/537.36",
@@ -103,5 +95,6 @@ first_url = r'https://movie.douban.com'
 
 #需要抓取的站点的主域
 domain = [r'https://movie.douban.com']
+
 
 
