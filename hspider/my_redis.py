@@ -52,7 +52,7 @@ class MyRedis(myconnection.RedisConnect):
 				parse_url = urlparse.urlparse(base_url)
 				#提取domain，比如‘https://movie.douban.com’
 				domain = '://'.join((parse_url.scheme, parse_url.netloc))
-				new_list = []
+				
 				for url in url_list:					
 					#这一步就可以排除所有不在domain下的url,
 					#比如‘https://www.douban.com’这个域名以及该域名下的所有url就会被排除
@@ -67,13 +67,15 @@ class MyRedis(myconnection.RedisConnect):
 							url = urlparse.urldefrag(url)[0]
 							#url中可能存在转义字符,统一转化为原始字符,比如将%7e转化为~
 							url = urllib.unquote(url)
+						if len(url) >100:
+							continue
 						if not self.bloomfilter.add(url):#判断url是否在bloomfilter中
 							print url, 'it is not in bloomfilter'
 							new_item = json.dumps({'url': url, 
 												   'base_url': base_url})
-							new_list.append(new_item)
-				else:
-					self.r.rpush('url_queue', new_list)
+							
+				
+							self.r.rpush('url_queue', new_item)
 		
 	def stop(self, signum, frame):
 		print u'程序将要终止运行，正在保存bloomfilter到文件，请稍候......'

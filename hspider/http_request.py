@@ -11,6 +11,7 @@ import logging.config
 import random
 import datetime
 import time
+from selenium import webdriver
 import requests; requests.adapters.DEFAULT_RETRIES = 3
 from chardet.universaldetector import UniversalDetector
 from cStringIO import StringIO
@@ -19,7 +20,7 @@ import save
 import myconnection
 
 class HttpRequest(myconnection.RedisConnect):
-	logging.config.dictConfig(my_settings.my_logging_config)
+	
 	def __init__(self):
 		#redis连接
 		super(HttpRequest, self).__init__()
@@ -46,11 +47,11 @@ class HttpRequest(myconnection.RedisConnect):
 			self.throttle.request_delay(url)
 			host = urlparse.urlparse(url).netloc
 			headers={'user-agent':random.choice(my_settings.user_agent),
-					'accept-encoding':"gzip",
+					'accept-encoding':"gzip, deflate",
 					'host':host,
 					'accept':'text/html',
 					'accept-charset':'utf-8',
-					'accept-language':'zh-cn'}
+					'accept-language':'zh-cn, zh;q=0.8'}
 
 			if base_url:
 				headers['referer'] = base_url
@@ -103,21 +104,7 @@ class HttpRequest(myconnection.RedisConnect):
 		else:
 			pass
 												
-	def get_js_webpage(self):
-		"""
-
-		解析js页面
-		"""
-		pass
-
-	def get_sign_in_page(self):
-		"""
-
-		抓取需要登录的页面
-		"""
-		pass
 		
-
 class Throttle(object):
 	"""
 	用于请求调优
@@ -156,8 +143,75 @@ class FindCache(myconnection.MySQLConnect):
 		self.cousor.execute('select url from html where url=%s',(url.encode('utf-8'),))
 		self.connect.commit()
 		url = self.cousor.fetchone()
-		a = 1 if url else 0
-		return a
+		return url
+
+
+class Driver(object):
+	#抓取js页面
+	#使用类来定义就可以使用同一个浏览器同一个窗口打开页面
+	#这就可以保持会话状态，如果是登录的，一直持续登录
+	#如果要同时打开两个窗口，只需要创建两个实例就可以
+	def __init__(self, mydriver=u'chrome'):
+		if mydriver == u'chrome':
+		    self.driver = webdriver.Chrome(ur'd:\chrome\chromedriver.exe')
+		elif mydriver == u'phantomjs':
+		    self.driver = webdriver.PhantomJS(ur'd:\phantomjs\phantomjs\bin\phantomjs.exe')
+		elif mydriver == u'firefox':
+			#selenium对firefox的版本有要求，但是好像最新版的selenium没这个限制
+		    self.driver = webdriver.Firefox()
+
+	def get_signin(self, url):
+		self.driver.get(url)
+		try:
+		#表示会至多等待10秒，如果定位的元素没找到就抛出TimeoutException
+		    wait = WebDriverWait(self.driver, 10)
+		    wait.until(EC.presence_of_element_located((By.XPATH, u'//input[@name="account"]')))
+		except exceptions.TimeoutException as e:
+		    pass
+		else:
+		    account = self.driver.find_element_by_xpath(u'//input[@name="account"]')
+		    account.send_keys(u'524964426@qq.com')
+
+		    password = self.driver.find_element_by_xpath(u'//input[@name="password"]')
+		    password.send_keys(u'lymlhhj123')
+			
+		    remember_me = self.driver.find_element_by_xpath(u'//input[@name="remember_me"]')
+		    remember_me.click()
+
+		    submit = self.driver.find_element_by_xpath(u'//button[@class="sign-button submit"]')	
+		    submit.click()
+		finally:	
+		    time.sleep(1)
+
+	@property
+	def cookies(self):
+		return self.driver.get_cookies()
+
+
+class SIGNIN(object):
+	_HEADERS = {'user-agent': """Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 
+		                        (KHTML, like Gecko) Chrome/54.0.2840.71 Safari/537.36""",
+	           'accept': """text/html, application/xhtml+xml, 
+	                        application/xml;q=0.9, image/webp,*/*;q=0.8""",
+	           'accept-encoding': 'gzip, deflate',	           
+	           'Accept-Language': 'zh-CN, zh;q=0.8',
+	           'Cache-Control': 'no-cache',
+	           'Connection': 'keep-alive',}
+	def __init__(self, url):
+		self.s = requests.Session()
+		self.driver = Driver()
+		self._sign_in(url)
+		
+	def _sign_in(self, url):
+		self.driver.get_signin(url)
+		raw_cookies = self.driver.cookies
+		cookies = {(item['name'], item['value']) for item in raw_cookies}
+		host = urlparse.urlparse(url).netloc
+		SIGNIN._HEADERS['host'] = host
+		self.s.get(url, headers=SIGNIN._HEADERS, cookies=cookies)
+
+	def get(self, url):
+		self.s.get(url)
 
 
 def webpage_code(response):#解决网页编码问题
